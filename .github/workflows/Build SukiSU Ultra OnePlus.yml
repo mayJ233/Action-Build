@@ -30,7 +30,8 @@ on:
           - oneplus_ace5_pro
           - oneplus_13t
           - oneplus_13s
-          - GitHub有bug可能不显示最后一项,误使用此项
+          - oneplus_pad_2_pro
+          - oneplus_pad_3
       BUILD_METHOD:
         type: choice
         description: "编译方式"
@@ -39,16 +40,20 @@ on:
         options:
           - gki
           - perf
+      SUSFS_CI:
+        type: choice
+        description: "下载SUSFS模块调用方式"
+        required: true
+        default: CI
+        options:
+          - CI
+          - Release
+          - NoN
       SUFFIX:
         type: string
         description: "自定义内核后缀 (留空则使用随机字符串)"
         required: false
         default: ""
-      SUSFS_CI:
-        type: boolean
-        description: "下载SUSFS模块是否调用CI构建？"
-        required: true
-        default: true
       FAST_BUILD:
         type: boolean
         description: "是否启用极速构建？"
@@ -64,14 +69,14 @@ on:
         description: "是否启用内核模块(KPM)？"
         required: true
         default: true
-      ZRAM:
-        type: boolean
-        description: "是否添加更多的ZRAM算法？"
-        required: true
-        default: false
       SCHED:
         type: boolean
         description: "是否添加风驰驱动？"
+        required: true
+        default: false
+      ZRAM:
+        type: boolean
+        description: "是否添加更多的ZRAM算法？"
         required: true
         default: false
 
@@ -84,7 +89,7 @@ jobs:
 
   build:
     needs: get-config
-    name: ${{ github.event.inputs.FAST_BUILD == 'true' && ' [FAST]' || '' }} For ${{ github.event.inputs.FEIL }} ${{ github.event.inputs.BUILD_METHOD }} ${{ github.event.inputs.SUFFIX }}
+    name: ${{ github.event.inputs.FAST_BUILD == 'true' && ' [FAST]' || '' }}${{ github.event.inputs.SCHED == 'true' && ' [SCHED]' || '' }}${{ github.event.inputs.ZRAM == 'true' && ' [ZRAM]' || '' }}For ${{ github.event.inputs.FEIL }} ${{ github.event.inputs.BUILD_METHOD }} ${{ github.event.inputs.SUFFIX }}
     runs-on: ubuntu-latest
     env:
       CPU: ${{ needs.get-config.outputs.CPU }}
@@ -241,6 +246,16 @@ jobs:
           git add -A
           git commit -m "Fix: inject random kernel suffix"
 
+      - name: Download manifest to .repo/manifests
+        id: fetch_manifest
+        run: |
+          feil="${{ github.event.inputs.FEIL }}"
+          cpu="${{ needs.get-config.outputs.CPU }}"
+          mkdir -p .repo/manifests
+          echo "Downloading manifest $feil.xml from branch oneplus/$cpu..."
+          curl -LO --retry 5 --retry-delay 2 --retry-connrefused "https://raw.githubusercontent.com/OnePlusOSS/kernel_manifest/oneplus/$cpu/$feil.xml"
+          mv "$feil.xml" ".repo/manifests/${feil}.xml"
+
       # 添加 SukiSU Ultra
       - name: Add KernelSU-SukiSU Ultra
         run: |
@@ -282,11 +297,20 @@ jobs:
             patch -p1 < fix_5.15.legacy.patch
             echo "fix_5.15_patch完成"
           fi
+          KERNEL_VERSION="${{ needs.get-config.outputs.KERNEL_VERSION }}"
+          feil="${{ github.event.inputs.FEIL }}"
+          TRUSTY_EXISTS="false"
+          if [[ "$KERNEL_VERSION" == "6.6" ]]; then
+            if grep -qr 'common-modules/trusty' "$GITHUB_WORKSPACE/.repo/manifests/${feil}.xml"; then
+              TRUSTY_EXISTS="true"
+            fi
+            echo "trusty_exists=$TRUSTY_EXISTS" >> $GITHUB_OUTPUT
 
-          if [[ "${{ github.event.inputs.FEIL }}" == "oneplus_13" || "${{ github.event.inputs.FEIL }}" == "oneplus_ace5_pro" ]]; then
-           echo "修复内核版本6.6部分机型susfs的问题"
-           sed -i 's/-32,12 +32,38/-32,11 +32,37/g' 50_add_susfs_in_gki-${{ needs.get-config.outputs.ANDROID_VERSION }}-${{ needs.get-config.outputs.KERNEL_VERSION }}.patch
-           sed -i '/#include <trace\/hooks\/fs.h>/d' 50_add_susfs_in_gki-${{ needs.get-config.outputs.ANDROID_VERSION }}-${{ needs.get-config.outputs.KERNEL_VERSION }}.patch
+            if [[ "$TRUSTY_EXISTS" == "false" ]]; then
+              echo "修复内核版本6.6部分机型susfs的问题"
+              sed -i 's/-32,12 +32,38/-32,11 +32,37/g' 50_add_susfs_in_gki-${{ needs.get-config.outputs.ANDROID_VERSION }}-${KERNEL_VERSION}.patch
+              sed -i '/#include <trace\/hooks\/fs.h>/d' 50_add_susfs_in_gki-${{ needs.get-config.outputs.ANDROID_VERSION }}-${KERNEL_VERSION}.patch
+            fi
           fi
           patch -p1 < 50_add_susfs_in_gki-${{ needs.get-config.outputs.ANDROID_VERSION }}-${{ needs.get-config.outputs.KERNEL_VERSION }}.patch || true
           echo "susfs_patch完成"
@@ -543,7 +567,7 @@ jobs:
 
       # 下载 SUSFS 模块（CI）
       - name: Download Latest SUSFS Module from CI
-        if: ${{ github.event.inputs.SUSFS_CI == 'true' }}
+        if: ${{ github.event.inputs.SUSFS_CI == 'CI' }}
         continue-on-error: true
         run: |
           LATEST_RUN_ID=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
@@ -566,10 +590,10 @@ jobs:
 
       # 下载 SUSFS 模块（Release）*
       - name: Download Latest SUSFS Module from Release
-        if: ${{ github.event.inputs.SUSFS_CI == 'false' }}
+        if: ${{ github.event.inputs.SUSFS_CI == 'Release' }}
         continue-on-error: true
         run: |
-          wget -O ksu_module_susfs_1.5.2+_Release.zip https://github.com/sidex15/ksu_module_susfs/releases/latest/download/ksu_module_susfs_1.5.2+.zipAdd commentMore actions
+          wget -O ksu_module_susfs_1.5.2+_Release.zip https://github.com/sidex15/ksu_module_susfs/releases/latest/download/ksu_module_susfs_1.5.2+.zip
           cp ksu_module_susfs_1.5.2+_Release.zip ./AnyKernel3/
 
       # 解压 SukiSU Ultra（CI）（不自动安装）
@@ -602,7 +626,7 @@ jobs:
       - name: Set zip suffix
         id: suffix
         run: |
-          echo "value=${{ github.event.inputs.VFS == 'true' && '_VFS' || '' }}${{ github.event.inputs.ZRAM == 'true' && '_LZ4KD' || '' }}" >> $GITHUB_OUTPUT
+          echo "value=${{ github.event.inputs.VFS == 'true' && '_VFS' || '' }}${{ github.event.inputs.ZRAM == 'true' && '_LZ4KD' || '' }}${{ github.event.inputs.KPM == 'true' && '_KPM' || '' }}${{ github.event.inputs.SCHED== 'true' && '_SCHED' || '' }}" >> $GITHUB_OUTPUT
 
       - name: Auto map FEIL to Android version by manifest
         id: feil_clean
@@ -610,29 +634,7 @@ jobs:
           feil="${{ github.event.inputs.FEIL }}"
           cpu="${{ needs.get-config.outputs.CPU }}"
           xml=".repo/manifests/${feil}.xml"
-
-          if [ ! -f "$xml" ]; then
-            echo "Manifest $xml not found,This is expected behavior,not an error.Attempting to download from branch oneplus/$cpu..."
-            mkdir -p .repo/manifests
-            git clone --depth=1 --branch oneplus/$cpu https://github.com/OnePlusOSS/kernel_manifest.git repo_tmp || {
-              echo "Failed to clone branch oneplus/$cpu"
-              echo "value=${feil}_AndroidUnknown" >> "$GITHUB_OUTPUT"
-              exit 0
-            }
-
-            if [ -f "repo_tmp/${feil}.xml" ]; then
-              mv "repo_tmp/${feil}.xml" "$xml"
-            else
-              echo "Manifest file ${feil}.xml not found in branch oneplus/$cpu"
-              echo "value=${feil}_AndroidUnknown" >> "$GITHUB_OUTPUT"
-              rm -rf repo_tmp
-              exit 0
-            fi
-            rm -rf repo_tmp
-          fi
-
-          echo "Manifest $xml found."
-
+          cd $GITHUB_WORKSPACE
           # 去掉末尾的 _x（只删一次）
           feil_base=$(echo "$feil" | sed -E 's/_[a-z]$//')
 
@@ -656,7 +658,7 @@ jobs:
       - name: Upload AnyKernel3
         uses: actions/upload-artifact@v4
         with:
-          name: AnyKernel3_SukiSUUltra_${{ env.KSUVER }}_${{ steps.feil_clean.outputs.value }}_KPM${{ steps.suffix.outputs.value }}
+          name: AnyKernel3_SukiSUUltra_${{ env.KSUVER }}_${{ steps.feil_clean.outputs.value }}${{ steps.suffix.outputs.value }}
           path: ./AnyKernel3/*
 
       - name: Download And Unzip ZRAM
