@@ -7,13 +7,16 @@
  
 <details>
 <summary><strong>点击查看如何fork项目</strong></summary>
-<img src="https://github.com/Numbersf/Action-Build/blob/main/pic%2Fmake.gif" width="500"/>
+<img src="https://github.com/Numbersf/Action-Build/blob/SukiSU-Ultra/pic/make.gif" width="500"/>
 </details>
  
 <details>
 <summary><strong>点击查看如何同步fork后的项目到最新</strong></summary>
-<img src="https://github.com/Numbersf/Action-Build/blob/main/pic%2Fsyncfork.png" width="150"/>
-<summary>请及时同步!某些更新可能会导致旧版本失效!</summary>
+<p>
+  <img src="https://github.com/Numbersf/Action-Build/blob/SukiSU-Ultra/pic/syncfork.png" width="150"/>
+  <img src="https://github.com/Numbersf/Action-Build/blob/SukiSU-Ultra/pic/syncfork(2).png" width="150"/>
+</p>
+<summary>请及时同步!某些更新可能会导致旧版本失效!如果同步后依旧跑不出来请删除并重新fork!完成以上步骤后仍有问题再反馈提交issues</summary>
 </details>
  
 # 公告
@@ -82,10 +85,12 @@
 >
 >| 机型类型                     | 平均耗时范围        | 最大耗时   |
 >|------------------------|---------------------|------------|
->| `其他所有机型` | `19min ~ 29min` | `35min`|
->| `特殊机型eg:一加11-A14;一加11-A13`| `55min ~ 1h17min` | `1h23min` |
+>| `大部分机型` | `1st:19min ~ 35min 2nd:9min ~ 19min` | `42min`|
+>| `OnePlus 11-A13、A14`| `1st:1h8min ~ 1h17min 2nd:50min ~ 1h10min` | `1h23min` |
+>
+>使用ccache第一次会减速
 > </details>
-> 
+>
 > <details>
 > <summary><strong>点击查看使用官方build.sh的用时</strong></summary>
 >
@@ -94,11 +99,12 @@
 >|----------------------|------------------------|------------|
 >| `sm8450,sm8475,sm8550` | `29min ~ 35min`| `45min`    |
 >| `sm7675,sm7550,sm8650` | `59min ~ 1h12min`| `1h28min` |
->| `sm8750+`| `1h55min ~ 2h22min`| `2h27min`     |
->| `特殊机型eg:一加11-A14;一加11-A13`| `1h1min ~ 1h28min`| `1h32min` |
+>| `sm8750+`| `1h1min ~ 1h8min`| `1h24min`     |
+>|`OnePlus 11-A13、A14`| `1h1min ~ 1h28min`| `1h32min` |
 >
 ></details>
->也就是说,如果你跑的时长超过了对应机型的最高时间,请尝试重新跑并查看step确保不是官方自己的问题
+>
+>也就是说,如果你跑的时长超过了对应机型的最高时间,请暂停重新跑并查看step,特别注意Initialize Repo and Sync这一步,除了一些非A15的特殊机型外,都应该在10min以内.超过可能是GitHub官方出了问题,可以重新尝试一次,依旧失败请等待修复
  
  
 ------
@@ -107,7 +113,7 @@
 >
 >记得**音量下**安装模块!  
 >
->如果你的机型是``sm8750``,并且曾经使用了官方脚本构建,而现在需要使用``Fast Build(极速构建)``,请先还原``dtbo.img、system_dlkm.erofs.img、vendor_dlkm.img、vendor_boot.img``**否则会无法开机!**  
+>如果你的机型是``sm8750``,并且曾经使用了官方脚本构建,而现在需要使用``Fast Build(极速构建)``,请先还原``dtbo.img、system_dlkm(.erofs).img、vendor_dlkm.img、vendor_boot.img``**否则会无法开机!**  
 >
 >如果你开启了``ZRAM``算法,请在刷入``Anykernel3``重启**前**安装``ZRAM``模块,部分参数请自行调整。另外``5.10``内核暂不支持开启``ZRAM``算法,因为没有找到``zram.ko``路径  
 >
@@ -115,6 +121,8 @@
 ------
  
 # 更新日志
+--使用`ccache`加速工作流,仅开启极速构建`fast build`有效,第一次使用、重大更新、换`key`要重新生成`cache`,可能会降低速度  
+--首发适配`sm8750`的`setlocalversion`文件中`echo`新格式,修复自定义&随机伪官方后缀失效。现在,全机型、全编译方式完美支持此功能  
 --添加`TRUSTY_EXISTS`用于自动检测`6.6`内核是否内核源码存在缺陷,判断是否`sed`处理  
 --支持**部分机型**开启风驰驱动(自选是否开启),驱动来自[@HanKuCha](https://github.com/HanKuCha)  
 --删除`input`中除机型配置文件`FEIL`以外的所有其他机型参数并递推到`feil-map`以支持更多选择  
@@ -128,8 +136,8 @@
 2.当自定义启用时,修改内核为“x.xx.xxx-androidxx-自定义内容”,同时也不再保留androidxx-8-o-g3b1e97b8b29f
 3.当使用Fast Build(极速构建)时,为新的源内核信息x.xx.xxx-o-g3b1e97b8b29f添加缺失的内核android版本号,再进行1或2中的操作
 ```  
---支持部分机型极速编译`(支持5.10[首发]、5.15[首发]、6.1、6.6)`  
---修复`OnePlus Ace5Pro、OnePlus 13`跑不出来无法开机问题,直接使用官方`dtbo`就可以直接开机[@reigadegr](https://github.com/reigadegr)  
+--支持极速编译`(5.10[首发]、5.15[首发]、6.1、6.6)`  
+--修复`OnePlus Ace5Pro、OnePlus 13`跑不出来或者无法开机问题,直接使用官方`dtbo`就可以直接开机[@reigadegr](https://github.com/reigadegr)  
 --支持显示自己填入的内容在`Show selected inputs debug`这一步,同时工作流名称也可以看到一些东西  
 --从写入 `Anykernel3.zip` 的配置文件后缀中删除潜在的版本代码,替换成精确的 `Android` 版本号`XX.X.X`
 ```
